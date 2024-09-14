@@ -46,6 +46,9 @@ async def start(client, message):
     reply_markup = buttons.build_menu(2)
     if len(message.command) > 1 and message.command[1] == "wzmlx":
         await deleteMessage(message)
+    elif len(message.command) > 1 and message.command[1].endswith('_$'):
+        userid = message.from_user.id
+        print(message.command[1])
     elif len(message.command) > 1 and config_dict['TOKEN_TIMEOUT']:
         userid = message.from_user.id
         encrypted_url = message.command[1]

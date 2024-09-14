@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import platform
 from base64 import b64encode
-from datetime import datetime
+import base64
+from datetime import datetime, timedelta, timezone
 from os import path as ospath
 from pkg_resources import get_distribution, DistributionNotFound
 from aiofiles import open as aiopen
@@ -41,7 +42,7 @@ SIZE_UNITS   = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
 STATUS_START = 0
 PAGES        = 1
 PAGE_NO      = 1
-
+AUTH_CACHE = {}
 
 class MirrorStatus:
     STATUS_UPLOADING   = "Upload"
@@ -643,7 +644,55 @@ async def fetch_user_dumps(user_id):
     return {}
 
 
+
+def store_token(user_id, token):
+    AUTH_CACHE[user_id] = token
+
+def get_token(user_id):
+    return AUTH_CACHE.get(user_id, None)
+
+def decode_token(token):
+    try:
+        # Remove the _$ from the end
+        token = token.replace('_$', '')
+
+        # Decode base64 string
+        decoded_token = base64.b64decode(token).decode('utf-8')
+
+        # Split the token to extract user_id and time components
+        user_id, time_part = decoded_token.split('_')
+        return user_id, time_part
+    except Exception as e:
+        print(f"Error decoding token: {e}")
+        return None, None
+
+def is_token_valid(token):
+    user_id, time_part = decode_token(token)
+    if not user_id or not time_part:
+        return False
+    try:
+        token_time = datetime.strptime(time_part, '%H:%M/%d:%m')
+        token_time = token_time.replace(tzinfo=timezone.utc)
+        current_time = datetime.now(timezone.utc)
+        if current_time - timedelta(hours=1) <= token_time <= current_time:
+            return True
+        else:
+            return False
+    except ValueError as ve:
+        print(f"Error parsing token time: {ve}")
+        return False
+
+
 async def checking_access(user_id, button=None):
+    if not config_dict['TOKEN_TIMEOUT'] or bool(user_id == OWNER_ID or user_id in user_data and user_data[user_id].get('is_sudo')):
+        return None, button
+    if is_token_valid():
+        return None, button
+    button = ButtonMaker()
+    button.ubutton('Generate New Token', f'https://t.me/dcfusionbot/betalab?startapp=torr_{bot_name}')
+    return f'<i>Temporary Token has been expired,</i> Kindly generate a New Temp Token to start using bot Again.\n<b>Validity :</b> <code>{get_readable_time(config_dict["TOKEN_TIMEOUT"])}</code>', button
+
+async def checking_access_old(user_id, button=None):
     if not config_dict['TOKEN_TIMEOUT'] or bool(user_id == OWNER_ID or user_id in user_data and user_data[user_id].get('is_sudo')):
         return None, button
     user_data.setdefault(user_id, {})
